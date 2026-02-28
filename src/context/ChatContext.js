@@ -13,6 +13,7 @@ export const ChatProvider = ({ children }) => {
   const fetchConversations = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await axios.get('/api/chat/conversations');
       setConversations(res.data);
     } catch (err) {
@@ -24,12 +25,13 @@ export const ChatProvider = ({ children }) => {
 
   const createConversation = useCallback(async () => {
     try {
+      setError(null);
       const res = await axios.post('/api/chat/conversations', { title: 'New Chat' });
       const newConv = res.data;
-      setConversations(prev => [{ 
-        ...newConv, 
-        messageCount: 0, 
-        lastMessage: '' 
+      setConversations(prev => [{
+        ...newConv,
+        messageCount: 0,
+        lastMessage: ''
       }, ...prev]);
       setCurrentConversation(newConv);
       return newConv;
@@ -39,25 +41,37 @@ export const ChatProvider = ({ children }) => {
   }, []);
 
   const loadConversation = useCallback(async (id) => {
+    if (!id) return;
+
+    // Don't reload if already the current one
+    if (currentConversation?._id === id && currentConversation.messages?.length > 0) {
+      return currentConversation;
+    }
+
     try {
       setLoading(true);
+      setError(null);
       const res = await axios.get(`/api/chat/conversations/${id}`);
       setCurrentConversation(res.data);
       return res.data;
     } catch (err) {
-      setError('Failed to load conversation');
+      // Only set error if it's not a cancelled request or a simple navigation hiccup
+      if (err.response?.status !== 404 || !currentConversation) {
+        setError('Failed to load conversation');
+      }
+      console.error('Load error:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentConversation]);
 
-  const sendMessage = useCallback(async (conversationId, content) => {
+  const sendMessage = useCallback(async (conversationId, content, compare = false) => {
     try {
       setSending(true);
       setError(null);
       const res = await axios.post(
         `/api/chat/conversations/${conversationId}/message`,
-        { content }
+        { content, compare }
       );
 
       const { userMessage, assistantMessage, title } = res.data;
@@ -73,7 +87,7 @@ export const ChatProvider = ({ children }) => {
       });
 
       // Update sidebar preview
-      setConversations(prev => prev.map(conv => 
+      setConversations(prev => prev.map(conv =>
         conv._id === conversationId
           ? { ...conv, title, lastMessage: assistantMessage.content.substring(0, 100), updatedAt: new Date() }
           : conv
@@ -91,6 +105,7 @@ export const ChatProvider = ({ children }) => {
 
   const deleteConversation = useCallback(async (id) => {
     try {
+      setError(null);
       await axios.delete(`/api/chat/conversations/${id}`);
       setConversations(prev => prev.filter(c => c._id !== id));
       if (currentConversation?._id === id) {
@@ -103,8 +118,9 @@ export const ChatProvider = ({ children }) => {
 
   const renameConversation = useCallback(async (id, title) => {
     try {
+      setError(null);
       await axios.put(`/api/chat/conversations/${id}`, { title });
-      setConversations(prev => prev.map(c => 
+      setConversations(prev => prev.map(c =>
         c._id === id ? { ...c, title } : c
       ));
       if (currentConversation?._id === id) {

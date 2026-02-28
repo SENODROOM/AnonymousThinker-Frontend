@@ -23,9 +23,21 @@ const ChatPage = () => {
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
+  const [compare, setCompare] = useState(false);
   const [welcomePrompt] = useState(WELCOME_PROMPTS[Math.floor(Math.random() * WELCOME_PROMPTS.length)]);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const lastIdRef = useRef(id);
+
+  // Clear errors after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, setError]);
 
   useEffect(() => {
     fetchConversations();
@@ -37,9 +49,13 @@ const ChatPage = () => {
 
   useEffect(() => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      const isSwitching = lastIdRef.current !== id;
+      messagesEndRef.current.scrollIntoView({
+        behavior: isSwitching ? 'auto' : 'smooth'
+      });
+      lastIdRef.current = id;
     }
-  }, [currentConversation?.messages, sending]);
+  }, [currentConversation?.messages, id, sending]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -60,13 +76,14 @@ const ChatPage = () => {
       await new Promise(r => setTimeout(r, 100));
     }
     const msg = input.trim();
+    const isComparing = compare; // Capture current state
     setInput('');
     try {
-      await sendMessage(convId, msg);
+      await sendMessage(convId, msg, isComparing);
     } catch (err) {
       setInput(msg);
     }
-  }, [input, sending, id, createConversation, navigate, sendMessage, setError]);
+  }, [input, sending, id, createConversation, navigate, sendMessage, setError, compare]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -157,18 +174,16 @@ const ChatPage = () => {
           )}
         </div>
 
-        {/* Error bar */}
-        {error && (
-          <div className="error-bar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            {error}
-            <button onClick={() => setError(null)} className="error-bar__close">✕</button>
-          </div>
-        )}
+        {/* Notification Area */}
+        {/* <div style={{ position: 'fixed', top: '2rem', right: '2rem', zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {error && (
+            <div className="alert alert--error fade-in">
+              <span>⚠️</span>
+              <div style={{ flex: 1 }}>{error}</div>
+              <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: '10px' }}>✕</button>
+            </div>
+          )}
+        </div> */}
 
         {/* Input area */}
         <div className="input-area">
@@ -184,9 +199,20 @@ const ChatPage = () => {
               disabled={sending}
             />
             <div className="input-footer">
-              <span className={`input-hint${sending ? ' input-hint--thinking' : ''}`}>
-                {sending ? '● Thinking...' : 'Enter to send · Shift+Enter for new line'}
-              </span>
+              <div className="input-footer__left">
+                <button
+                  onClick={() => setCompare(!compare)}
+                  className={`compare-toggle${compare ? ' compare-toggle--active' : ''}`}
+                  title="Compare with DeepSeek-R1-70B"
+                  disabled={sending}
+                >
+                  <div className="compare-toggle__dot" />
+                  Compare Models
+                </button>
+                <span className={`input-hint${sending ? ' input-hint--thinking' : ''}`}>
+                  {sending ? '● Thinking...' : 'Enter to send · Shift+Enter for new line'}
+                </span>
+              </div>
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || sending}

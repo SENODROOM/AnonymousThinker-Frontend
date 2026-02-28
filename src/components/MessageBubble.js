@@ -61,9 +61,26 @@ const MessageBubble = ({ message, isLast }) => {
           <span className="msg-role-name">AnonymousThinker</span>
         )}
 
-        <div className={`msg-bubble msg-bubble--${isUser ? 'user' : 'ai'}`}>
+        <div className={`msg-bubble msg-bubble--${isUser ? 'user' : 'ai'}${message.comparisonContent ? ' msg-bubble--comparison' : ''}`}>
           {isUser ? (
             <p>{message.content}</p>
+          ) : message.comparisonContent ? (
+            <div className="comparison-container">
+              <div className="comparison-pane">
+                <span className="comparison-label">Personal Model (8B)</span>
+                <div
+                  className="message-content"
+                  dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }}
+                />
+              </div>
+              <div className="comparison-pane comparison-pane--powerful">
+                <span className="comparison-label">Powerful Model (70B)</span>
+                <div
+                  className="message-content"
+                  dangerouslySetInnerHTML={{ __html: parseMarkdown(message.comparisonContent) }}
+                />
+              </div>
+            </div>
           ) : (
             <div
               className="message-content"
