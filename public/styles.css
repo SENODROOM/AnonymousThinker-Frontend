@@ -1246,7 +1246,8 @@ textarea {
 }
 
 .auth-logo__name {
-    font-weight: 800;
+    font-size: 1.2rem;
+    font-weight: 500;
     color: var(--text-primary);
     letter-spacing: -0.025em;
 }
