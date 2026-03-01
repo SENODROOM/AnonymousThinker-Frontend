@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const getBaseURL = () => {
     if (process.env.NODE_ENV === 'production') {
-        return 'https://anoymous-thinker-api.vercel.app';
+        return 'https://anonymous-thinker-api.vercel.app';
     }
     return 'http://localhost:5000';
 };
