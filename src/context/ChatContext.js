@@ -31,7 +31,8 @@ export const ChatProvider = ({ children }) => {
       setConversations(prev => [{
         ...newConv,
         messageCount: 0,
-        lastMessage: ''
+        lastMessage: '',
+        isPinned: false
       }, ...prev]);
       setCurrentConversation(newConv);
       return newConv;
@@ -42,12 +43,9 @@ export const ChatProvider = ({ children }) => {
 
   const loadConversation = useCallback(async (id) => {
     if (!id) return;
-
-    // Don't reload if already the current one
     if (currentConversation?._id === id && currentConversation.messages?.length > 0) {
       return currentConversation;
     }
-
     try {
       setLoading(true);
       setError(null);
@@ -55,7 +53,6 @@ export const ChatProvider = ({ children }) => {
       setCurrentConversation(res.data);
       return res.data;
     } catch (err) {
-      // Only set error if it's not a cancelled request or a simple navigation hiccup
       if (err.response?.status !== 404 || !currentConversation) {
         setError('Failed to load conversation');
       }
@@ -65,18 +62,17 @@ export const ChatProvider = ({ children }) => {
     }
   }, [currentConversation]);
 
-  const sendMessage = useCallback(async (conversationId, content, compare = false) => {
+  const sendMessage = useCallback(async (conversationId, content) => {
     try {
       setSending(true);
       setError(null);
       const res = await api.post(
         `/api/chat/conversations/${conversationId}/message`,
-        { content, compare }
+        { content }
       );
 
       const { userMessage, assistantMessage, title } = res.data;
 
-      // Update current conversation with new messages
       setCurrentConversation(prev => {
         if (!prev || prev._id !== conversationId) return prev;
         return {
@@ -86,12 +82,15 @@ export const ChatProvider = ({ children }) => {
         };
       });
 
-      // Update sidebar preview
       setConversations(prev => prev.map(conv =>
         conv._id === conversationId
           ? { ...conv, title, lastMessage: assistantMessage.content.substring(0, 100), updatedAt: new Date() }
           : conv
-      ).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)));
+      ).sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return new Date(b.updatedAt) - new Date(a.updatedAt);
+      }));
 
       return { userMessage, assistantMessage };
     } catch (err) {
@@ -131,11 +130,75 @@ export const ChatProvider = ({ children }) => {
     }
   }, [currentConversation]);
 
+  // ── NEW: Pin / Unpin ─────────────────────────────────────────────────────────
+  const togglePin = useCallback(async (id) => {
+    try {
+      const res = await api.patch(`/api/chat/conversations/${id}/pin`);
+      const { isPinned } = res.data;
+      setConversations(prev => prev.map(c =>
+        c._id === id ? { ...c, isPinned } : c
+      ).sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return new Date(b.updatedAt) - new Date(a.updatedAt);
+      }));
+    } catch (err) {
+      setError('Failed to pin conversation');
+    }
+  }, []);
+
+  // ── NEW: Archive ─────────────────────────────────────────────────────────────
+  const archiveConversation = useCallback(async (id) => {
+    try {
+      await api.patch(`/api/chat/conversations/${id}/archive`);
+      setConversations(prev => prev.filter(c => c._id !== id));
+      if (currentConversation?._id === id) setCurrentConversation(null);
+    } catch (err) {
+      setError('Failed to archive conversation');
+    }
+  }, [currentConversation]);
+
+  // ── NEW: Message reaction ─────────────────────────────────────────────────────
+  const reactToMessage = useCallback(async (conversationId, msgIndex, reaction) => {
+    try {
+      const res = await api.post(
+        `/api/chat/conversations/${conversationId}/messages/${msgIndex}/react`,
+        { reaction }
+      );
+      const { reactions, userReaction } = res.data;
+
+      setCurrentConversation(prev => {
+        if (!prev || prev._id !== conversationId) return prev;
+        const messages = [...prev.messages];
+        messages[msgIndex] = { ...messages[msgIndex], reactions, userReaction };
+        return { ...prev, messages };
+      });
+    } catch (err) {
+      console.error('Reaction error:', err);
+    }
+  }, []);
+
+  // ── NEW: Export conversation ─────────────────────────────────────────────────
+  const exportConversation = useCallback(async (id, title) => {
+    try {
+      const res = await api.get(`/api/chat/conversations/${id}/export`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'text/plain' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(title || 'conversation').replace(/[^a-z0-9]/gi, '_')}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError('Failed to export conversation');
+    }
+  }, []);
+
   return (
     <ChatContext.Provider value={{
       conversations, currentConversation, loading, sending, error,
       fetchConversations, createConversation, loadConversation,
       sendMessage, deleteConversation, renameConversation,
+      togglePin, archiveConversation, reactToMessage, exportConversation,
       setCurrentConversation, setError
     }}>
       {children}
