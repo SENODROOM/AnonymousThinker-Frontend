@@ -166,14 +166,14 @@ const TrainingPage = () => {
           <div className="topbar__title">AI Command Center</div>
         </div>
 
-        <div className="training-container">
-
-          <header className="training-header">
-            <h1 className="training-title" style={{ marginTop: '1rem' }}>Sovereign AI Hub</h1>
-            <p className="training-subtitle">
-              Configure your AI's worldview, logical strategies, and semantic knowledge base.
-            </p>
-          </header>
+        <div className="training-scroll">
+          <div className="training-container">
+            <header className="training-header">
+              <h1 className="training-title" style={{ marginTop: '1rem' }}>Sovereign AI Hub</h1>
+              <p className="training-subtitle">
+                Configure your AI's worldview, logical strategies, and semantic knowledge base.
+              </p>
+            </header>
 
           {/* Alert Notifications */}
           <div style={{ position: 'fixed', top: '2rem', right: '2rem', zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '400px' }}>
@@ -358,7 +358,8 @@ const TrainingPage = () => {
                 </div>
               )}
             </div>
-          </section>
+            </section>
+          </div>
         </div>
       </main>
     </div>

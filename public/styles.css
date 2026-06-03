@@ -1347,10 +1347,20 @@ body {
 /* ─────────────────────────────────────────────────────────────
    TRAINING PAGE
 ───────────────────────────────────────────────────────────── */
+.training-scroll {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
 .training-container {
+  width: 100%;
   max-width: 980px;
   margin: 0 auto;
-  padding: 2.5rem 1.75rem;
+  padding: 2.5rem 1.75rem 4rem;
   animation: fadeUp 0.4s var(--ease-spring) forwards;
 }
 .training-header {
