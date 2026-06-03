@@ -1513,9 +1513,42 @@ body {
   background: rgba(124, 58, 237, 0.06);
   transform: scale(1.01);
 }
+.kb-upload-label--disabled {
+  cursor: wait;
+  opacity: 0.78;
+  pointer-events: none;
+}
 .kb-upload-icon {
   font-size: 2.75rem;
   margin-bottom: 1.25rem;
+}
+.kb-upload-progress {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.kb-upload-progress__bar {
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.kb-upload-progress__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 0.25s var(--ease-smooth);
+}
+.kb-upload-progress__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-top: 0.65rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
 }
 
 .knowledge-list {

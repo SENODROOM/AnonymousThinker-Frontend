@@ -14,6 +14,7 @@ const TrainingPage = () => {
   // Knowledge Base State
   const [knowledgeList, setKnowledgeList] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [reindexing, setReindexing] = useState(false);
 
   // Pinecone Status
@@ -89,32 +90,110 @@ const TrainingPage = () => {
     }
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const handleFolderUpload = async (e) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    setError(null);
+    setSuccess(null);
+    setUploadProgress(null);
+
+    const existingNames = new Set(knowledgeList.map((item) => item.fileName.toLowerCase()));
+    const seenNames = new Set();
+    const pdfFiles = selectedFiles.filter((file) => file.name.toLowerCase().endsWith('.pdf'));
+    const queuedFiles = [];
+    let skippedDuplicates = 0;
+
+    pdfFiles.forEach((file) => {
+      const normalizedName = file.name.toLowerCase();
+      if (existingNames.has(normalizedName) || seenNames.has(normalizedName)) {
+        skippedDuplicates++;
+        return;
+      }
+      seenNames.add(normalizedName);
+      queuedFiles.push(file);
+    });
+
+    if (pdfFiles.length === 0) {
+      setError('No PDF files were found in that folder.');
+      e.target.value = null;
+      return;
+    }
+
+    if (queuedFiles.length === 0) {
+      setSuccess(`Skipped ${skippedDuplicates} PDF${skippedDuplicates === 1 ? '' : 's'} already in the knowledge base.`);
+      e.target.value = null;
+      return;
+    }
 
     setUploading(true);
     setError(null);
     setSuccess(null);
-    const formData = new FormData();
-    formData.append('file', file);
+    setUploadProgress({
+      current: 0,
+      total: queuedFiles.length,
+      fileName: '',
+      processed: 0,
+      skipped: skippedDuplicates,
+      failed: 0
+    });
 
-    try {
-      const { data } = await api.post('/api/training/knowledge/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+    let processed = 0;
+    let skipped = skippedDuplicates;
+    let failed = 0;
+    const failedNames = [];
+
+    for (const [index, file] of queuedFiles.entries()) {
+      setUploadProgress({
+        current: index + 1,
+        total: queuedFiles.length,
+        fileName: file.name,
+        processed,
+        skipped,
+        failed
       });
-      const pineconeNote = data.semanticSearch
-        ? ` — ${data.pineconeChunks} vectors indexed in Pinecone ✓`
-        : '';
-      setSuccess(`✅ "${file.name}" uploaded (${data.chunks} chunks${pineconeNote})`);
-      fetchKnowledge();
-      fetchPineconeStatus();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Upload failed');
-    } finally {
-      setUploading(false);
-      e.target.value = null;
+
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      formData.append('fileName', file.name);
+
+      try {
+        const { data } = await api.post('/api/training/knowledge/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+
+        if (data.skipped) {
+          skipped++;
+        } else {
+          processed++;
+        }
+      } catch (err) {
+        failed++;
+        failedNames.push(file.name);
+        console.error(`Failed to upload ${file.name}:`, err);
+      }
     }
+
+    await fetchKnowledge();
+    await fetchPineconeStatus();
+
+    setUploadProgress({
+      current: queuedFiles.length,
+      total: queuedFiles.length,
+      fileName: '',
+      processed,
+      skipped,
+      failed
+    });
+
+    if (failed > 0) {
+      setError(`Failed to ingest ${failed} PDF${failed === 1 ? '' : 's'}: ${failedNames.slice(0, 3).join(', ')}${failedNames.length > 3 ? '...' : ''}`);
+    }
+
+    const summary = `Folder ingest complete: ${processed} processed, ${skipped} skipped, ${failed} failed.`;
+    setSuccess(summary);
+    setUploading(false);
+    e.target.value = null;
   };
 
   const handleDeleteKnowledge = async (fileName) => {
@@ -292,7 +371,7 @@ const TrainingPage = () => {
             </div>
 
             <p className="training-subtitle" style={{ margin: '0 0 2rem 0', textAlign: 'left', maxWidth: '100%' }}>
-              Upload scholarly PDFs or text files. Each upload is automatically chunked and indexed into Pinecone for deep semantic search.
+              Select a folder of scholarly PDFs. Each PDF is queued, chunked, and indexed into Pinecone for deep semantic search.
               The AI will find the most relevant passages from your books to ground every answer.
             </p>
 
@@ -300,26 +379,52 @@ const TrainingPage = () => {
               <input
                 type="file"
                 id="kb-file-upload"
-                onChange={handleFileUpload}
-                accept=".pdf,.txt"
+                onChange={handleFolderUpload}
+                accept=".pdf,application/pdf"
                 disabled={uploading}
+                multiple
+                directory=""
+                webkitdirectory=""
                 hidden
               />
               <label htmlFor="kb-file-upload" className={`kb-upload-label ${uploading ? 'kb-upload-label--disabled' : ''}`}>
                 {uploading ? (
                   <>
                     <div className="spinner" style={{ width: '40px', height: '40px', marginBottom: '1.5rem' }} />
-                    <span className="training-label">Processing & Indexing into Pinecone...</span>
-                    <span style={{ fontSize: '0.78rem', marginTop: '0.5rem', opacity: 0.6 }}>This may take a moment for large files</span>
+                    <span className="training-label">Queueing PDFs one by one...</span>
+                    <span style={{ fontSize: '0.78rem', marginTop: '0.5rem', opacity: 0.6 }}>
+                      {uploadProgress?.fileName
+                        ? `Processing ${uploadProgress.current} of ${uploadProgress.total}: ${uploadProgress.fileName}`
+                        : 'Finalizing folder ingest...'}
+                    </span>
                   </>
                 ) : (
                   <>
                     <span className="kb-upload-icon">💠</span>
-                    <span className="training-label">Ingest New Knowledge Source</span>
-                    <span style={{ fontSize: '0.8rem', marginTop: '0.5rem', opacity: 0.6 }}>Supports PDF and TXT · Auto-indexed in Pinecone</span>
+                    <span className="training-label">Ingest New Knowledge Folder</span>
+                    <span style={{ fontSize: '0.8rem', marginTop: '0.5rem', opacity: 0.6 }}>Select a folder · PDFs auto-detected · duplicates skipped</span>
                   </>
                 )}
               </label>
+              {uploadProgress && (
+                <div className="kb-upload-progress">
+                  <div className="kb-upload-progress__bar">
+                    <div
+                      className="kb-upload-progress__fill"
+                      style={{
+                        width: `${uploadProgress.total > 0
+                          ? Math.round((uploadProgress.current / uploadProgress.total) * 100)
+                          : 0}%`
+                      }}
+                    />
+                  </div>
+                  <div className="kb-upload-progress__meta">
+                    <span>{uploadProgress.processed} processed</span>
+                    <span>{uploadProgress.skipped} skipped</span>
+                    <span>{uploadProgress.failed} failed</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="knowledge-list">
